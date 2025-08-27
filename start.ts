@@ -1,12 +1,15 @@
 import pMap from "p-map";
 import { log } from "@util/log";
 import { config } from "@util/config";
-import { publishEvent, createGroup, startConsumer } from "@util/redis";
+import { createStreamHelper } from "@util/redis";
 import { createOrder } from "@util/orders";
+import { redis } from "./redis";
+
+const streams = createStreamHelper(redis);
 
 const ensureGroups = async () => {
   for (const group of config.groups) {
-    await createGroup({
+    await streams.createGroup({
       group: group.name,
       stream: config.stream,
     });
@@ -19,7 +22,7 @@ const createProducer = async () => {
     const data = {
       order,
     };
-    const eventId = await publishEvent({
+    const eventId = await streams.publishEvent({
       stream: config.stream,
       data,
     });
@@ -34,28 +37,36 @@ const createProducer = async () => {
 };
 
 const createConsumers = async () => {
-  pMap(config.groups, async (group) => {
-    await pMap(group.consumers, async (consumer) => {
-      await startConsumer(
-        {
-          stream: config.stream,
-          group: group.name,
-          consumer,
-        },
-        async ({ id, data }) => {
-          log.info(
-            {
-              group: group.name,
-              consumer,
-              stream: config.stream,
-              eventId: id,
-              data,
-            },
-            "Consumer group is processing message."
-          );
-        }
-      );
-    });
+  const allConsumers = config.groups.reduce((res, group) => {
+    res.push(
+      ...group.consumers.map((consumer) => ({
+        group: group.name,
+        consumer,
+      }))
+    );
+    return res;
+  }, []);
+
+  pMap(allConsumers, async ({ group, consumer }) => {
+    await streams.startConsumer(
+      {
+        stream: config.stream,
+        group: group,
+        consumer,
+      },
+      async ({ id, data }) => {
+        log.info(
+          {
+            group: group,
+            consumer,
+            stream: config.stream,
+            eventId: id,
+            data,
+          },
+          "Consumer group is processing message."
+        );
+      }
+    );
   }).catch((err) => {
     throw new Error("Failed to start consumers", {
       cause: err,
