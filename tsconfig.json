@@ -17,8 +17,11 @@
     "lib": ["esnext"],
     "types": ["node"],
     "moduleResolution": "nodenext",
-    // and npm install -D @types/node
-
+    "baseUrl": ".",
+    "paths": {
+      "@util": ["./util"],
+      "@util/*": ["./util/*"]
+    },
     // Other Outputs
     "sourceMap": true,
     "declaration": true,

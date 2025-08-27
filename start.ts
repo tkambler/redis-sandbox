@@ -1,19 +1,14 @@
 import pMap from "p-map";
-import {
-  publishEvent,
-  createGroup,
-  createOrder,
-  stream,
-  groups,
-  log,
-  startConsumer,
-} from "./util";
+import { log } from "@util/log";
+import { config } from "@util/config";
+import { publishEvent, createGroup, startConsumer } from "@util/redis";
+import { createOrder } from "@util/orders";
 
 const ensureGroups = async () => {
-  for (const group of groups) {
+  for (const group of config.groups) {
     await createGroup({
       group: group.name,
-      stream,
+      stream: config.stream,
     });
   }
 };
@@ -25,11 +20,11 @@ const createProducer = async () => {
       order,
     };
     const eventId = await publishEvent({
-      stream,
+      stream: config.stream,
       data,
     });
     log.info(
-      { data, stream, event_id: eventId },
+      { data, stream: config.stream, event_id: eventId },
       "New order event published to stream."
     );
   };
@@ -39,11 +34,11 @@ const createProducer = async () => {
 };
 
 const createConsumers = async () => {
-  pMap(groups, async (group) => {
+  pMap(config.groups, async (group) => {
     await pMap(group.consumers, async (consumer) => {
       await startConsumer(
         {
-          stream,
+          stream: config.stream,
           group: group.name,
           consumer,
         },
@@ -52,7 +47,7 @@ const createConsumers = async () => {
             {
               group: group.name,
               consumer,
-              stream,
+              stream: config.stream,
               eventId: id,
               data,
             },
